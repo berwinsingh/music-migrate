@@ -1,0 +1,19 @@
+[project]
+name = "music-migrate"
+version = "0.1.0"
+description = "Move your music library between Apple Music, Spotify, YouTube Music and CSV."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = ["ytmusicapi>=1.10", "spotipy>=2.24"]
+
+[project.scripts]
+music-migrate = "music_migrate:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.urls]
+Homepage = "https://github.com/berwinsingh/music-migrate"
+Issues = "https://github.com/berwinsingh/music-migrate/issues"

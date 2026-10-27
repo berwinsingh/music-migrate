@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Migrate</title>
+<style>
+:root {
+  --bg: #f5f5f7; --surface: #ffffff; --surface-2: #ececf0; --hover: rgba(0, 0, 0, .04); --line: rgba(0, 0, 0, .08);
+  --text: #1d1d1f; --muted: #6e6e73; --faint: #a1a1a6;
+  --accent: var(--text); --on-accent: var(--bg);
+  --ok: #1a8f4c; --warn: #b26a00; --warn-bg: #fff3dc; --bad: #d70015;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 6px 20px rgba(0, 0, 0, .05);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000; --surface: #1c1c1e; --surface-2: #2c2c2e; --hover: rgba(255, 255, 255, .06); --line: rgba(255, 255, 255, .1);
+    --text: #f5f5f7; --muted: #98989d; --faint: #636366;
+    --ok: #30d158; --warn: #ffb340; --warn-bg: rgba(255, 159, 10, .15); --bad: #ff453a;
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+/* The app takes on the colour of where your music is going. */
+body[data-to="ytmusic"] { --accent: #ff0033; --on-accent: #ffffff; }
+body[data-to="spotify"] { --accent: #1ed760; --on-accent: #000000; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.wrap { max-width: 720px; margin: 0 auto; padding: 16px 16px 140px; }
+header { display: flex; align-items: center; gap: 10px; height: 44px; margin-bottom: 40px; }
+.mark { width: 28px; height: 28px; border-radius: 8px; background: var(--text); display: grid; place-items: center; }
+.mark svg { width: 15px; height: 15px; fill: var(--bg); }
+.brand { font-weight: 600; letter-spacing: -.01em; }
+.local { margin-left: auto; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.local svg { width: 13px; height: 13px; }
+h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.05; letter-spacing: -.028em; font-weight: 700; margin: 0 0 10px; }
+.lede { color: var(--muted); font-size: 17px; margin: 0 0 28px; max-width: 34em; }
+.center { text-align: center; }
+.center .lede { margin-left: auto; margin-right: auto; }
+h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 28px 6px 8px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); }
+code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-2); padding: 1px 5px; border-radius: 5px; color: var(--text); }
+:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; }
+
+/* buttons and fields */
+.btn { font: inherit; font-weight: 600; border: 0; border-radius: 999px; padding: 10px 18px; cursor: pointer; background: var(--surface-2); color: var(--text);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; text-decoration: none; transition: transform .1s, filter .15s, opacity .15s; }
+.btn:hover:not(:disabled) { filter: brightness(.96); }
+.btn:active:not(:disabled) { transform: scale(.98); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.btn.big { padding: 15px 28px; font-size: 16px; }
+.btn.small { padding: 6px 14px; font-size: 13.5px; }
+.btn.ghost { background: none; color: var(--muted); }
+.btn.ghost:hover { color: var(--text); }
+textarea, input[type=text], input[type=password], input[type=search], select {
+  width: 100%; font: inherit; color: inherit; background: var(--surface-2); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; }
+kbd { font: 600 12.5px -apple-system, BlinkMacSystemFont, sans-serif; background: var(--surface-2); color: var(--text); padding: 1px 6px; border-radius: 5px; border-bottom: 1.5px solid var(--line); }
+.signin textarea { margin-top: 12px; min-height: 56px; }
+textarea { min-height: 96px; font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row > * { flex: 1; min-width: 180px; }
+.hint { color: var(--muted); font-size: 13.5px; margin: 0; }
+.privacy { font-size: 12.5px; color: var(--faint); margin: 12px 0 0; }
+
+/* from → to */
+.route { display: grid; grid-template-columns: minmax(0, 1fr) minmax(40px, 120px) minmax(0, 1fr); align-items: start; padding: 26px 12px 20px; }
+.side { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
+.pick { all: unset; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 14px 10px; border-radius: 16px; max-width: 100%; }
+button.pick { cursor: pointer; }
+button.pick:hover { background: var(--hover); }
+button.pick:focus-visible { outline: 2px solid var(--accent); }
+.app { width: 72px; height: 72px; margin-bottom: 10px; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .14)); transition: transform .2s; }
+.app svg { width: 100%; height: 100%; display: block; }
+.app .empty-app { color: var(--faint); filter: none; }
+button.pick:hover .app { transform: translateY(-2px); }
+.label { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--faint); }
+.svc { font-size: 17px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
+.svc svg { width: 14px; height: 14px; color: var(--muted); flex: none; }
+.status { font-size: 13px; color: var(--muted); min-height: 19px; padding: 0 4px; }
+.linkbtn { all: unset; cursor: pointer; color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.flow { position: relative; height: 72px; margin-top: 8px; display: grid; place-items: center; }
+.flow::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 3px; margin-top: -1.5px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--from-c), var(--to-c));
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 11px); mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 11px); }
+.flow span { position: relative; width: 30px; height: 30px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
+.flow span svg { width: 14px; height: 14px; }
+.live .flow::before { animation: flow .5s linear infinite; }
+@keyframes flow { to { -webkit-mask-position: 11px 0; mask-position: 11px 0; } }
+.menu { position: absolute; top: calc(100% - 4px); z-index: 5; width: 290px; max-width: calc(100vw - 32px); padding: 6px; text-align: left;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 44px rgba(0, 0, 0, .2); animation: drop .14s ease; }
+.side[data-side="from"] .menu { left: 0; }
+.side[data-side="to"] .menu { right: 0; }
+@keyframes drop { from { opacity: 0; transform: translateY(-4px); } }
+.menu button { all: unset; box-sizing: border-box; width: 100%; display: flex; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+.menu button:hover:not(:disabled), .menu button:focus-visible { background: var(--hover); }
+.menu button[aria-checked="true"] { background: var(--surface-2); }
+.menu button:disabled { opacity: .45; cursor: not-allowed; }
+.menu b { display: block; font-weight: 600; font-size: 14.5px; }
+.menu small { display: block; color: var(--muted); font-size: 12.5px; }
+.mi { width: 32px; height: 32px; flex: none; }
+.mi svg { width: 100%; height: 100%; display: block; }
+
+/* sign-in and file cards */
+.signin, .pad { margin-top: 14px; }
+.pad { padding: 16px; }
+.signin summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; }
+.signin summary::-webkit-details-marker { display: none; }
+.signin summary > span:nth-child(2) { flex: 1; min-width: 0; }
+.signin summary b { display: block; font-weight: 600; }
+.signin summary small { display: block; color: var(--muted); font-size: 13px; }
+.signin[open] summary .btn { display: none; }
+.signin .body { border-top: 1px solid var(--line); padding: 16px; }
+.steps { counter-reset: s; list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
+.steps li { counter-increment: s; position: relative; padding-left: 34px; color: var(--muted); font-size: 14px; }
+.steps li::before { content: counter(s); position: absolute; left: 0; top: -1px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface-2); color: var(--text); font-size: 12px; font-weight: 600; display: grid; place-items: center; }
+.steps b { color: var(--text); }
+.signin .actions { justify-content: flex-start; margin-top: 12px; }
+.file { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.file:focus-within .btn { outline: 2px solid var(--accent); outline-offset: 2px; }
+.file .name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* options */
+.options { padding: 4px; }
+.opt { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; cursor: pointer; }
+.opt:hover { background: var(--hover); }
+.opt .t { flex: 1; }
+.opt .t b { display: block; font-weight: 600; font-size: 14.5px; }
+.opt .t small { color: var(--muted); font-size: 13px; }
+.opt select { width: auto; padding: 6px 10px; border-radius: 8px; }
+.switch { appearance: none; width: 42px; height: 26px; border-radius: 99px; background: var(--surface-2); position: relative; cursor: pointer; flex: none; transition: background .2s; margin: 0; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .2s; }
+.switch:checked { background: var(--accent); }
+.switch:checked::after { transform: translateX(16px); }
+.cta { margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.cta .btn { min-width: min(320px, 100%); }
+
+/* working */
+.route.small { max-width: 440px; margin: 8px auto 26px; padding: 0; }
+.route.small .app { width: 64px; height: 64px; }
+.route.small .flow { height: 64px; }
+.bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; max-width: 440px; margin: 26px auto 12px; }
+.bar span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: inherit; transition: width .4s ease; }
+.bar.indet span { width: 30%; animation: indet 1.3s ease-in-out infinite; }
+@keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.count { display: flex; justify-content: space-between; gap: 16px; max-width: 440px; margin: 0 auto; font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.count span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.count span:last-child { flex: none; }
+#working h1 { font-size: clamp(24px, 4.5vw, 32px); }
+
+/* review */
+.eyebrow { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; color: var(--muted); font-weight: 500; margin-bottom: 14px; }
+.eyebrow .mi { width: 20px; height: 20px; }
+.eyebrow svg.arr { width: 14px; height: 14px; }
+.toolbar { position: sticky; top: 0; z-index: 3; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 0; margin-top: 10px; background: var(--bg); }
+.tabs { display: inline-flex; background: var(--surface-2); border-radius: 999px; padding: 3px; }
+.tabs button { font: inherit; font-size: 13.5px; font-weight: 600; border: 0; background: none; color: var(--muted); padding: 7px 14px; border-radius: 999px; cursor: pointer; display: inline-flex; gap: 6px; }
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.tabs .n { font-variant-numeric: tabular-nums; color: var(--faint); font-weight: 500; }
+.tabs .n.warn { color: var(--warn); font-weight: 700; }
+.toolbar input { flex: 1; min-width: 150px; border-radius: 999px; padding: 9px 16px; }
+.list { overflow: hidden; }
+.track + .track { border-top: 1px solid var(--line); }
+.head { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 14px; padding: 10px 14px; cursor: pointer; }
+.head:hover { background: var(--hover); }
+.head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.art { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex: none; background: var(--surface-2); display: grid; place-items: center; color: var(--faint); }
+.art svg { width: 18px; height: 18px; }
+.meta { flex: 1; min-width: 0; }
+.meta b { display: block; font-weight: 600; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta small { display: block; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.state { font-size: 12.5px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.state svg { width: 15px; height: 15px; color: var(--ok); }
+.state.warn { color: var(--warn); background: var(--warn-bg); padding: 4px 10px; border-radius: 999px; }
+.chev { width: 16px; height: 16px; color: var(--faint); transition: transform .2s; flex: none; }
+.track.open .chev { transform: rotate(180deg); }
+.track.open { background: color-mix(in srgb, var(--surface-2) 35%, transparent); }
+.track.skipped .meta, .track.skipped .art { opacity: .5; }
+.cands { padding: 0 14px 14px 72px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.cands-h { font-size: 12.5px; color: var(--muted); margin: 0 0 4px 10px; }
+.cand { display: flex; align-items: center; gap: 6px; border-radius: 12px; padding-right: 6px; }
+.cand.sel { background: color-mix(in srgb, var(--accent) 11%, transparent); }
+.choose { all: unset; box-sizing: border-box; flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 12px; cursor: pointer; }
+.cand:not(.sel) .choose:hover { background: var(--hover); }
+.choose:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.choose .art { width: 38px; height: 38px; border-radius: 6px; }
+.score { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--faint); flex: none; }
+.sel .radio { border: 5.5px solid var(--accent); }
+.choose.none { color: var(--muted); font-size: 14px; }
+.cand:last-child { padding-right: 44px; }  /* line the radio up with the rows that have a play button */
+.play { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: var(--text); background: var(--surface-2); flex: none; text-decoration: none; }
+.play:hover { filter: brightness(.94); }
+.play svg { width: 11px; height: 11px; margin-left: 2px; }
+.empty { padding: 44px 20px; text-align: center; color: var(--muted); }
+.dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-top: 1px solid var(--line); }
+.dock .in { max-width: 720px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+.dock-note { flex: 1; font-size: 13px; color: var(--muted); text-align: right; }
+
+/* done */
+.badge { width: 72px; height: 72px; border-radius: 50%; margin: 16px auto 22px; display: grid; place-items: center; background: var(--accent); color: var(--on-accent);
+  animation: pop .5s cubic-bezier(.2, 1.4, .4, 1); }
+.badge svg { width: 34px; height: 34px; }
+@keyframes pop { from { transform: scale(.4); opacity: 0; } }
+.links { text-align: left; margin: 28px auto 0; max-width: 480px; overflow: hidden; }
+.links a { display: flex; align-items: center; gap: 12px; padding: 12px 16px; text-decoration: none; }
+.links a + a { border-top: 1px solid var(--line); }
+.links a:hover { background: var(--hover); }
+.links .art { width: 36px; height: 36px; }
+.links .t { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links .o { color: var(--muted); font-size: 13.5px; }
+.actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 28px; }
+
+.toast { position: fixed; left: 50%; top: 16px; transform: translate(-50%, -160%); background: var(--text); color: var(--bg); padding: 12px 18px; border-radius: 14px;
+  max-width: min(560px, calc(100vw - 32px)); box-shadow: 0 10px 30px rgba(0, 0, 0, .2); transition: transform .3s ease; z-index: 10; font-size: 14px; }
+.toast.show { transform: translate(-50%, 0); }
+.toast.bad { background: var(--bad); color: #fff; }
+[hidden] { display: none !important; }
+
+@media (max-width: 560px) {
+  header { margin-bottom: 28px; }
+  .route { padding: 20px 2px 16px; grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); }
+  .pick { padding: 8px 6px 10px; }
+  .app, .route.small .app { width: 60px; height: 60px; }
+  .flow, .route.small .flow { height: 60px; }
+  .flow span { display: none; }
+  .svc { font-size: 15px; }
+  .cands { padding-left: 8px; padding-right: 8px; }
+  .head { gap: 12px; padding: 10px 12px; }
+  .dock-note { display: none; }
+  .dock .btn.primary { flex: 1; min-width: 0; padding: 13px 16px; font-size: 15px; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark"><svg viewBox="0 0 24 24"><path d="M9 18.5a3 3 0 1 1-2-2.83V5.5l12-2.5v12.5a3 3 0 1 1-2-2.83V7.6l-8 1.67z"/></svg></div>
+    <span class="brand">Music Migrate</span>
+    <span class="local"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Runs on this computer</span>
+  </header>
+
+  <!-- 1. setup -->
+  <section id="setup" hidden>
+    <h1>Move your music</h1>
+    <p class="lede">Your library, favorites and playlists, from one app to another. Logins stay on this computer.</p>
+    <div class="card"><div class="route" id="route"></div></div>
+    <div id="signin"></div>
+    <div id="optionsWrap" hidden>
+      <h2>Organize</h2>
+      <div class="card options">
+        <label class="opt"><span class="t"><b>Like every song</b><small id="likeHint"></small></span><input type="checkbox" class="switch" id="optLike" checked></label>
+        <label class="opt" id="genreOpt"><span class="t"><b>Genre playlists</b><small>A playlist for each genre you play a lot. Favorites always get their own.</small></span>
+          <select id="optGenre" aria-label="Minimum songs for a genre playlist"><option value="0">Off</option><option value="5">5+ songs</option><option value="10" selected>10+ songs</option><option value="20">20+ songs</option></select></label>
+        <label class="opt"><span class="t"><b>One playlist with everything</b><small>Also put your whole library in a single playlist.</small></span><input type="checkbox" class="switch" id="optAll"></label>
+      </div>
+    </div>
+    <div class="cta">
+      <button class="btn primary big" id="scanBtn" disabled>Find my songs</button>
+      <p class="hint" id="scanHint"></p>
+    </div>
+  </section>
+
+  <!-- 2/4. working -->
+  <section id="working" class="center" hidden>
+    <div class="route small live" id="workRoute"></div>
+    <h1 id="workTitle">Finding your songs</h1>
+    <div class="bar" id="bar"><span id="barFill"></span></div>
+    <div class="count"><span id="workNow"></span><span id="workCount"></span></div>
+  </section>
+
+  <!-- 3. review -->
+  <section id="review" hidden>
+    <div class="eyebrow" id="reviewRoute"></div>
+    <h1>Check your matches</h1>
+    <p class="lede" id="reviewLede"></p>
+    <div id="reviewConnect"></div>
+    <div class="toolbar">
+      <div class="tabs" role="tablist" aria-label="Filter" id="tabs"></div>
+      <input type="search" id="q" placeholder="Search" aria-label="Search songs">
+    </div>
+    <div class="card list" id="list"></div>
+  </section>
+
+  <!-- 5. done -->
+  <section id="done" class="center" hidden>
+    <div class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h1 id="doneTitle"></h1>
+    <p class="lede" id="doneLede"></p>
+    <div class="card links" id="links"></div>
+    <div class="actions">
+      <a class="btn primary big" id="openDest" target="_blank" rel="noopener">Open</a>
+      <button class="btn big" id="again">Move something else</button>
+    </div>
+  </section>
+
+  <!-- export to csv -->
+  <section id="export" class="center" hidden>
+    <div class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg></div>
+    <h1>Your library is ready</h1>
+    <p class="lede">Every song and playlist in one file. Open it in any spreadsheet app, or import it somewhere else.</p>
+    <div class="actions">
+      <a class="btn primary big" href="/api/export.csv" download="my-music.csv">Download CSV</a>
+      <button class="btn big" id="again2">Start over</button>
+    </div>
+  </section>
+</div>
+
+<div class="dock" id="dock" hidden>
+  <div class="in">
+    <button class="btn ghost" id="back">Start over</button>
+    <span class="dock-note" id="dockNote"></span>
+    <button class="btn primary big" id="moveBtn">Move songs</button>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const NOTE = '<path d="M9 18.5a3 3 0 1 1-2-2.83V5.5l12-2.5v12.5a3 3 0 1 1-2-2.83V7.6l-8 1.67z"/>';
+const ICONS = {
+  apple: `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#fa2d48"/><g fill="#fff" transform="translate(13.6 12.4) scale(1.6)">${NOTE}</g></svg>`,
+  spotify: `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#1ed760"/><g fill="none" stroke="#000" stroke-linecap="round">
+    <path stroke-width="5" d="M16.5 25.5c10.5-3.3 22-2.5 31 2.6"/><path stroke-width="4.2" d="M19 34c8.6-2.5 17.4-1.9 25 2"/><path stroke-width="3.6" d="M21.5 42c6.6-1.8 13-1.3 18.4 1.6"/></g></svg>`,
+  ytmusic: `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#ff0033"/><circle cx="32" cy="32" r="15" fill="none" stroke="#fff" stroke-width="3"/><path fill="#fff" d="M28 25.2v13.6L39.5 32z"/></svg>`,
+  csv: `<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#8e8e93"/><g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 15h13l8 8v26H22z"/><path d="M35 15v8h8M27 33h11M27 40h11"/></g></svg>`,
+};
+const EMPTY_APP = `<svg class="empty-app" viewBox="0 0 64 64"><rect x="1.5" y="1.5" width="61" height="61" rx="15" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 5"/><path d="M32 24v16M24 32h16" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`;
+const SVG = {
+  chev: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+  arrow: '<svg class="arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4v16l14-8z"/></svg>',
+  note: `<svg viewBox="0 0 24 24" fill="currentColor">${NOTE}</svg>`,
+  list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
+};
+const SERVICES = {
+  apple:   { name: "Apple Music",   color: "#fa2d48" },
+  spotify: { name: "Spotify",       color: "#1ed760" },
+  ytmusic: { name: "YouTube Music", color: "#ff0033" },
+  csv:     { name: "CSV file",      color: "#8e8e93" },
+};
+const OPEN_URL = { ytmusic: "https://music.youtube.com/library", spotify: "https://open.spotify.com/collection/tracks" };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const mmss = (s) => (s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : "");
+const dot = (...parts) => parts.filter(Boolean).map(esc).join(" · ");
+const state = { from: null, to: null, menu: null, csv: null, csvName: "", connected: {}, tracks: [], filter: "look", q: "", open: null };
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json", "X-Music-Migrate": "1" }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `Something went wrong (${r.status})`);
+  return data;
+}
+let toastTimer;
+function toast(msg, bad) {
+  const t = $("toast"); t.textContent = msg; t.className = "toast show" + (bad ? " bad" : "");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = "toast" + (bad ? " bad" : "")), bad ? 7000 : 3000);
+}
+function show(id) {
+  for (const s of ["setup", "working", "review", "done", "export"]) $(s).hidden = s !== id;
+  $("dock").hidden = id !== "review";
+  document.body.dataset.to = state.to || "";
+  window.scrollTo({ top: 0 });
+}
+
+/* ---------- from → to ---------- */
+function status(k, side) {
+  if (k === "apple") return "From the Music app on this Mac";
+  if (k === "csv") return side === "from" ? (state.csvName || "Pick a file below") : "Download a spreadsheet";
+  if (state.connected[k]) return "Signed in";
+  return side === "to" && k === "ytmusic" ? "Sign in after you review" : "Sign in needed";
+}
+function choices(side) {
+  const keys = side === "from" ? ["apple", "spotify", "ytmusic", "csv"] : ["ytmusic", "spotify", "csv", "apple"];
+  return keys.map((k) => {
+    if (side === "to" && k === "apple") return { k, sub: "Apple doesn't allow apps to add songs", off: true };
+    if (side === "to" && k === state.from && k !== "csv") return { k, sub: "Already where you're moving from", off: true };
+    if (side === "from" && k === "apple" && !state.connected.apple) return { k, sub: "Only works on a Mac", off: true };
+    return { k, sub: status(k, side) };
+  });
+}
+function sideHTML(side, interactive) {
+  const k = state[side];
+  const head = `<span class="app">${k ? ICONS[k] : EMPTY_APP}</span><span class="label">${side === "from" ? "From" : "To"}</span>
+    <span class="svc">${k ? SERVICES[k].name : "Choose"}${interactive ? SVG.chev : ""}</span>`;
+  if (!interactive) return `<div class="side"><div class="pick">${head}</div></div>`;
+  const signedIn = k && ["ytmusic", "spotify"].includes(k) && state.connected[k];
+  const menu = state.menu !== side ? "" : `<div class="menu" role="menu">${choices(side).map((c) =>
+    `<button role="menuitemradio" aria-checked="${k === c.k}" data-k="${c.k}" ${c.off ? "disabled" : ""}>
+      <span class="mi">${ICONS[c.k]}</span><span><b>${SERVICES[c.k].name}</b><small>${esc(c.sub)}</small></span></button>`).join("")}</div>`;
+  return `<div class="side" data-side="${side}">
+    <button class="pick" aria-haspopup="menu" aria-expanded="${state.menu === side}">${head}</button>
+    <span class="status">${!k ? "" : signedIn ? `Signed in · <button class="linkbtn" data-disconnect="${k}">Sign out</button>` : esc(status(k, side))}</span>
+    ${menu}</div>`;
+}
+function paintRoute(el, interactive) {
+  el.innerHTML = `${sideHTML("from", interactive)}<div class="flow" aria-hidden="true"><span>${SVG.arrow}</span></div>${sideHTML("to", interactive)}`;
+  el.style.setProperty("--from-c", SERVICES[state.from]?.color || "var(--faint)");
+  el.style.setProperty("--to-c", SERVICES[state.to]?.color || "var(--faint)");
+}
+
+$("route").onclick = async (e) => {
+  const out = e.target.closest("[data-disconnect]");
+  if (out) {
+    await api("/api/disconnect", { service: out.dataset.disconnect }); await refresh();
+    return toast("Signed out. The saved login is deleted.");
+  }
+  const item = e.target.closest(".menu button");
+  const pick = e.target.closest(".pick");
+  const side = (item || pick)?.closest(".side").dataset.side;
+  if (item) {
+    state[side] = item.dataset.k; state.menu = null;
+    if (side === "from" && state.to === state.from && state.from !== "csv") state.to = null;
+    render();
+    $("route").querySelector(`[data-side="${side}"] .pick`).focus();
+  } else if (pick) {
+    state.menu = state.menu === side ? null : side; render();
+    $("route").querySelector('.menu [aria-checked="true"], .menu button:not(:disabled)')?.focus();
+  }
+};
+document.addEventListener("click", (e) => { if (state.menu && !e.target.closest(".side")) { state.menu = null; render(); } });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && state.menu) { const side = state.menu; state.menu = null; render(); $("route").querySelector(`[data-side="${side}"] .pick`).focus(); }
+});
+
+/* ---------- sign-in ---------- */
+function connectPanel(k, side, collapsed = false) {
+  if (k === "csv" && side === "from") {
+    return `<div class="card pad"><label class="file"><input type="file" id="csvFile" accept=".csv,text/csv"><span class="btn small">Choose CSV file</span>
+      <span class="name">${esc(state.csvName || "No file chosen")}</span></label>
+      <p class="privacy">Needs <code>title</code> and <code>artist</code> columns. Exportify and TuneMyMusic exports work as they are.</p></div>`;
+  }
+  if (!["ytmusic", "spotify"].includes(k) || state.connected[k]) return "";
+  const why = side === "from" ? "Needed to read your library." : k === "ytmusic" ? "Needed to add your songs. Takes about a minute." : "One-time setup, about two minutes.";
+  const body = k === "ytmusic" ? `
+      <ol class="steps">
+        <li>Open <a href="https://music.youtube.com" target="_blank" rel="noopener">music.youtube.com</a> and make sure you're signed in.</li>
+        <li>Press <kbd>⌥⌘I</kbd> (<kbd>F12</kbd> on Windows), click the <b>Network</b> tab, type <code>browse</code> in its filter box, then click <b>Library</b> in YouTube Music's sidebar so a row shows up.</li>
+        <li>Right-click any <code>browse</code> row and choose <b>Copy → Copy as cURL</b>. On Windows pick <b>Copy as cURL (bash)</b>; in Firefox it's under <b>Copy Value</b>.</li>
+        <li>Come back here and click <b>Paste login</b>.</li>
+      </ol>
+      <div class="actions"><button class="btn primary ytPaste">Paste login</button><span class="hint">or paste into the box below</span></div>
+      <textarea class="ytHeaders" placeholder="curl 'https://music.youtube.com/youtubei/v1/browse…" spellcheck="false" aria-label="Copied browse request"></textarea>
+      <p class="privacy">YouTube Music has no sign-in for apps like this, so the app uses your browser's login. In Safari, first turn on Settings → Advanced → Show features for web developers.</p>`
+    : `
+      <ol class="steps">
+        <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a> and click <b>Create app</b>.</li>
+        <li>Give it any name. Under <b>Redirect URIs</b>, add <code>http://127.0.0.1:8888/callback</code> and tick <b>Web API</b>.</li>
+        <li>Open the app's <b>Settings</b> and copy the Client ID and Client Secret here. Spotify asks everyone to do this once.</li>
+      </ol>
+      <div class="row"><input type="text" class="spId" placeholder="Client ID" autocomplete="off" aria-label="Client ID"><input type="password" class="spSecret" placeholder="Client Secret" autocomplete="off" aria-label="Client Secret"></div>
+      <div class="actions"><button class="btn primary spConnect">Connect Spotify</button><span class="hint">A tab opens so you can approve access.</span></div>`;
+  return `<details class="card signin" ${collapsed ? "" : "open"} style="--accent: ${SERVICES[k].color}; --on-accent: ${k === "spotify" ? "#000" : "#fff"}">
+    <summary><span class="mi">${ICONS[k]}</span><span><b>Sign in to ${SERVICES[k].name}</b><small>${why}</small></span><span class="btn small">Sign in</span></summary>
+    <div class="body">${body}<p class="privacy">Saved only on this computer, in <code>~/.music-migrate</code>. Sign out any time to delete it.</p></div></details>`;
+}
+function bindPanels(root) {
+  const f = root.querySelector("#csvFile");
+  if (f) f.onchange = async () => {
+    const file = f.files[0]; if (!file) return;
+    state.csv = await file.text(); state.csvName = file.name; render();
+  };
+  const yt = root.querySelector(".ytPaste"), box = root.querySelector(".ytHeaders");
+  const ytConnect = (text) => text.trim() && connect(yt, "/api/connect/ytmusic", { headers: text }, "YouTube Music", "Paste login");
+  if (yt) yt.onclick = async () => {
+    try { box.value = await navigator.clipboard.readText(); } catch { box.focus(); return toast("Press ⌘V (Ctrl+V on Windows) to paste it into the box."); }
+    if (!box.value.trim()) return toast("Your clipboard is empty. Copy the browse request first (step 3).", true);
+    ytConnect(box.value);
+  };
+  if (box) box.onpaste = () => setTimeout(() => ytConnect(box.value));
+  const sp = root.querySelector(".spConnect");
+  if (sp) sp.onclick = () => connect(sp, "/api/connect/spotify", { client_id: root.querySelector(".spId").value, client_secret: root.querySelector(".spSecret").value }, "Spotify");
+}
+async function connect(btn, path, body, name, label = `Connect ${name}`) {
+  btn.disabled = true; btn.textContent = "Connecting…";
+  try { await api(path, body); await refresh(); toast(`Connected to ${name}.`); }
+  catch (e) { toast(e.message, true); btn.disabled = false; btn.textContent = label; }
+}
+
+/* ---------- setup ---------- */
+function ready() {
+  const { from, to, connected } = state;
+  if (!from || !to) return "Choose where your music is now and where it's going.";
+  if (from === "csv" && !state.csv) return "Choose a CSV file to read.";
+  for (const k of [from, to === "spotify" ? to : null]) if ((k === "ytmusic" || k === "spotify") && !connected[k]) return `Sign in to ${SERVICES[k].name} to continue.`;
+  return "";
+}
+function render() {
+  document.body.dataset.to = state.to || "";
+  paintRoute($("route"), true);
+  const panels = state.from ? [connectPanel(state.from, "from")] : [];
+  if (state.to === "spotify" && state.from !== "spotify") panels.push(connectPanel("spotify", "to"));
+  $("signin").innerHTML = panels.join("");
+  bindPanels($("signin"));
+  const svc = state.to && state.to !== "csv";
+  $("optionsWrap").hidden = !svc;
+  if (svc) $("likeHint").textContent = `Your whole library shows up in ${state.to === "spotify" ? "Liked Songs" : "Liked Music"}.`;
+  $("genreOpt").hidden = !["apple", "csv"].includes(state.from);
+  const why = ready();
+  $("scanBtn").disabled = !!why;
+  $("scanBtn").textContent = state.to === "csv" ? "Export my library" : state.to ? `Find my songs on ${SERVICES[state.to].name}` : "Find my songs";
+  $("scanHint").textContent = why || (state.to === "csv" ? "Saves your library and playlists as one file." : "Nothing changes yet. You'll check the matches first.");
+}
+async function refresh() {
+  const s = await api("/api/status");
+  state.connected = s.connected;
+  if (!$("setup").hidden) render();
+  if (!$("review").hidden) { reviewConnect(); counts(); }
+  return s;
+}
+function defaults() {
+  if (state.from || state.to) return;
+  state.from = state.connected.apple ? "apple" : null;
+  state.to = "ytmusic";
+}
+$("scanBtn").onclick = async () => {
+  try {
+    await api("/api/scan", { source: state.from, dest: state.to, csv: state.csv, min_genre: ["apple", "csv"].includes(state.from) ? +$("optGenre").value : 0 });
+    poll();
+  } catch (e) { toast(e.message, true); }
+};
+
+/* ---------- progress ---------- */
+let polling = false;
+async function poll() {
+  if (polling) return; polling = true;
+  try {
+    for (;;) {
+      const s = await api("/api/status");
+      if (s.phase === "scanning" || s.phase === "transferring") { working(s); await new Promise((r) => setTimeout(r, 400)); continue; }
+      await route(s); break;
+    }
+  } finally { polling = false; }
+}
+function working(s) {
+  if (s.source) { state.from = s.source; state.to = s.dest; }
+  if ($("working").hidden) { show("working"); paintRoute($("workRoute"), false); }
+  const dest = SERVICES[state.to]?.name || "the new app";
+  $("workTitle").textContent = s.phase === "scanning" ? (s.total ? `Finding your songs on ${dest}` : "Reading your library") : `Moving your music to ${dest}`;
+  $("bar").classList.toggle("indet", !s.total);
+  $("barFill").style.width = s.total ? `${(s.done / s.total) * 100}%` : "";
+  $("workNow").textContent = s.message || "";
+  $("workCount").textContent = s.total ? `${s.done} of ${s.total}` : "";
+}
+async function route(s) {
+  state.connected = s.connected;
+  if (s.phase !== "idle" && s.source) { state.from = s.source; state.to = s.dest; }  // survive a page reload
+  if (s.phase === "done" && !state.tracks.length) state.tracks = await api("/api/tracks");
+  if (s.phase === "review") return review();
+  if (s.phase === "done") return done(s.results);
+  if (s.phase === "export") return show("export");
+  if (s.phase === "error") { toast(s.error, true); await api("/api/reset", {}); }
+  defaults(); show("setup"); render();
+}
+
+/* ---------- review ---------- */
+const isLook = (t) => !t.choice && !t.skipped;
+async function review() {
+  state.tracks = await api("/api/tracks");
+  const to = SERVICES[state.to].name;
+  const ready = state.tracks.filter((t) => t.choice).length, look = state.tracks.filter(isLook).length;
+  const lists = new Set(state.tracks.flatMap((t) => t.playlists).filter((p) => p !== "Library")).size + ($("optAll").checked ? 1 : 0);
+  $("reviewRoute").innerHTML = `<span class="mi">${ICONS[state.from]}</span>${esc(SERVICES[state.from].name)}${SVG.arrow}<span class="mi">${ICONS[state.to]}</span>${esc(to)}`;
+  $("reviewLede").textContent = `Found ${ready} of ${state.tracks.length} songs on ${to}, and ${lists} playlist${lists === 1 ? "" : "s"} will be made. `
+    + (look ? `Check the ${look} we weren't sure about, then move them.` : "Everything matched.");
+  state.filter = look ? "look" : "all"; state.open = null;
+  show("review"); reviewConnect(); counts(); list();
+}
+function reviewConnect() {
+  $("reviewConnect").innerHTML = state.connected[state.to] ? "" : connectPanel(state.to, "to", true);
+  bindPanels($("reviewConnect"));
+}
+function counts() {
+  const ready = state.tracks.filter((t) => t.choice).length, look = state.tracks.filter(isLook).length;
+  $("tabs").innerHTML = [["look", "Need a look", look], ["ready", "Ready", ready], ["all", "All", state.tracks.length]].map(([f, label, n]) =>
+    `<button role="tab" data-f="${f}" aria-selected="${state.filter === f}">${label}<span class="n ${f === "look" && n ? "warn" : ""}">${n}</span></button>`).join("");
+  const signedIn = state.connected[state.to];
+  $("moveBtn").textContent = `${signedIn ? "Move" : "Sign in to move"} ${ready} song${ready === 1 ? "" : "s"}`;
+  $("moveBtn").disabled = ready === 0;
+  $("dockNote").textContent = look ? `${look} unchecked song${look === 1 ? "" : "s"} will be left out` : `Ready for ${SERVICES[state.to].name}`;
+}
+const art = (c, cls = "art") => c?.art ? `<img class="${cls}" src="${esc(c.art)}" alt="" loading="lazy">` : `<span class="${cls}">${SVG.note}</span>`;
+function row(t) {
+  const chosen = t.candidates.find((c) => c.id === t.choice);
+  const open = state.open === t.key;
+  const tag = chosen ? `<span class="state">${Math.round(chosen.score * 100)}% ${SVG.check}</span>`
+    : t.skipped ? `<span class="state">Left out</span>`
+    : t.candidates.length ? `<span class="state warn">Not sure</span>` : `<span class="state warn">Not found</span>`;
+  const cands = !open ? "" : `<div class="cands">
+    ${t.candidates.length ? `<p class="cands-h">Pick the right one on ${esc(SERVICES[state.to].name)}</p>` : `<p class="cands-h">We couldn't find this song on ${esc(SERVICES[state.to].name)}.</p>`}
+    ${t.candidates.map((c) => `<div class="cand ${c.id === t.choice ? "sel" : ""}">
+      <button class="choose" data-id="${esc(c.id)}" aria-pressed="${c.id === t.choice}">${art(c)}
+        <span class="meta"><b>${esc(c.title)}</b><small>${dot(c.artist || "Unknown artist", c.album, mmss(c.duration))}</small></span>
+        <span class="score">${Math.round(c.score * 100)}%</span><span class="radio"></span></button>
+      <a class="play" href="${esc(c.url)}" target="_blank" rel="noopener" aria-label="Listen to ${esc(c.title)}" title="Listen">${SVG.play}</a></div>`).join("")}
+    <div class="cand ${t.skipped ? "sel" : ""}"><button class="choose none" data-id="" aria-pressed="${!!t.skipped}"><span class="meta">Leave this song out</span><span class="radio"></span></button></div>
+  </div>`;
+  return `<div class="track ${open ? "open" : ""} ${t.skipped ? "skipped" : ""}" data-key="${esc(t.key)}">
+    <button class="head" aria-expanded="${open}">${art(chosen)}
+      <span class="meta"><b>${esc(t.title)}</b><small>${dot(t.artist || "Unknown artist", mmss(t.duration))}</small></span>${tag}${SVG.chev}</button>${cands}</div>`;
+}
+function list() {
+  const q = state.q.toLowerCase();
+  const rows = state.tracks.filter((t) =>
+    (state.filter === "all" || (state.filter === "look" ? isLook(t) : t.choice)) &&
+    (!q || `${t.title} ${t.artist}`.toLowerCase().includes(q)));
+  rows.sort((a, b) => (a.candidates[0]?.score ?? 0) - (b.candidates[0]?.score ?? 0));
+  $("list").innerHTML = rows.length ? rows.map(row).join("")
+    : `<div class="empty">${state.filter === "look" && !q ? "Nothing needs a look. Every song has a confident match." : "No songs here."}</div>`;
+}
+function redraw(...keys) {
+  for (const el of $("list").children) if (keys.includes(el.dataset.key)) el.outerHTML = row(state.tracks.find((t) => t.key === el.dataset.key));
+}
+$("list").onclick = async (e) => {
+  const tr = e.target.closest(".track"); if (!tr) return;
+  const t = state.tracks.find((x) => x.key === tr.dataset.key);
+  const pick = e.target.closest(".choose");
+  if (pick) {
+    t.choice = pick.dataset.id || null; t.skipped = !t.choice; state.open = null;
+    redraw(t.key); counts();
+    try { await api("/api/choice", { key: t.key, id: t.choice }); } catch (err) { toast(err.message, true); }
+  } else if (e.target.closest(".head")) {
+    const was = state.open; state.open = was === t.key ? null : t.key;
+    redraw(t.key, was);
+  }
+};
+$("tabs").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; state.filter = b.dataset.f; state.open = null; counts(); list(); };
+$("q").oninput = (e) => { state.q = e.target.value; list(); };
+$("moveBtn").onclick = async () => {
+  if (!state.connected[state.to]) {
+    const d = $("reviewConnect").querySelector("details");
+    d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); d.querySelector("textarea, input")?.focus({ preventScroll: true });
+    return;
+  }
+  try { await api("/api/transfer", { like: $("optLike").checked, library_playlist: $("optAll").checked }); poll(); }
+  catch (e) { toast(e.message, true); }
+};
+
+/* ---------- done ---------- */
+function done(results) {
+  const n = state.tracks.filter((t) => t.choice).length;
+  const name = SERVICES[state.to]?.name || "your new app";
+  $("doneTitle").textContent = `Your music is on ${name}`;
+  $("doneLede").textContent = `${n} songs added${$("optLike").checked ? " and liked" : ""}.${results.length ? " Here are your playlists." : ""}`;
+  $("links").innerHTML = results.map(([title, url]) =>
+    `<a href="${esc(url)}" target="_blank" rel="noopener"><span class="art">${SVG.list}</span><span class="t">${esc(title)}</span><span class="o">Open ↗</span></a>`).join("");
+  $("links").hidden = !results.length;
+  $("openDest").href = OPEN_URL[state.to] || "#";
+  $("openDest").textContent = `Open ${name}`;
+  show("done");
+}
+const again = async () => {
+  await api("/api/reset", {});
+  state.from = state.to = state.csv = null; state.csvName = ""; state.tracks = [];
+  defaults(); show("setup"); render();
+};
+$("again").onclick = again; $("again2").onclick = again; $("back").onclick = again;
+
+/* ---------- start ---------- */
+(async () => {
+  const s = await refresh();
+  if (s.phase === "scanning" || s.phase === "transferring") poll(); else route(s);
+})();
+</script>
+</body>
+</html>

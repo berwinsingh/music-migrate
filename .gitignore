@@ -1,0 +1,17 @@
+.music-migrate-cache.json
+ytmusic-auth.json
+oauth.json
+browser.json
+.cache
+migration-report.csv
+library.csv
+__pycache__/
+.venv/
+dist/
+.claude/
+.pytest_cache/
+.env
+*-auth.json
+spotify-*.json
+search-cache.json
+*.mp4
